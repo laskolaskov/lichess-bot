@@ -1,0 +1,19 @@
+{
+  "name": "lichess-playground",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/laskolaskov/lichess-playground.git"
+  },
+  "author": "Lasko Laskov",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/laskolaskov/lichess-playground/issues"
+  },
+  "homepage": "https://github.com/laskolaskov/lichess-playground#readme"
+}
