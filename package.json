@@ -15,5 +15,9 @@
   "bugs": {
     "url": "https://github.com/laskolaskov/lichess-playground/issues"
   },
-  "homepage": "https://github.com/laskolaskov/lichess-playground#readme"
+  "homepage": "https://github.com/laskolaskov/lichess-playground#readme",
+  "dependencies": {
+    "dotenv": "^8.2.0",
+    "node-fetch": "^2.6.1"
+  }
 }
