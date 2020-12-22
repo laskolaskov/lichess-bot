@@ -237,7 +237,8 @@ function streamUrl(url) {
                 retry++
                 if (retry >= maxAttempts) {
                     log.warn(`Maximum attempts (${maxAttempts}) reached. Aborting.`)
-                    break
+                    console.log('Could not connect. Exiting. See logs for details.')
+                    process.exit()
                 }
                 log.warn(`Trying again! Attempt: ${retry + 1}.`)
             }
@@ -255,4 +256,5 @@ function streamUrl(url) {
     eventEmmiter.on('data', (e) => {
         processEvent(e)
     })
+    console.log('Awaiting challenge!')
 })()
