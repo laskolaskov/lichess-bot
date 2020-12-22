@@ -18,6 +18,7 @@
   "homepage": "https://github.com/laskolaskov/lichess-playground#readme",
   "dependencies": {
     "dotenv": "^8.2.0",
-    "node-fetch": "^2.6.1"
+    "node-fetch": "^2.6.1",
+    "simple-node-logger": "^18.12.24"
   }
 }
