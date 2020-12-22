@@ -1,1 +1,1 @@
-# lichess-playground
+# lichess-bot
