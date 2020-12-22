@@ -5,7 +5,7 @@ const {
 const fetch = require('node-fetch')
 const SimpleNodeLogger = require('simple-node-logger')
 const logOpts = {
-    logFilePath: 'lichess-playground.log',
+    logFilePath: 'lichess-bot.log',
     timestampFormat: 'YYYY-MM-DD HH:mm:ss.SSS'
 }
 const log = SimpleNodeLogger.createSimpleFileLogger(logOpts)
@@ -15,7 +15,7 @@ const readline = require('readline')/* .createInterface({
 }) */
 
 const {
-    BOARD_TOKEN: token,
+    BOT_TOKEN: token,
     URL: url
 } = process.env
 
@@ -130,7 +130,7 @@ function makeMove() {
         if (true /* TODO validate the move*/) {
             rl.close()
             //make move request
-            const moveUrl = `${url}/api/board/game/${currentGame}/move/${move}`
+            const moveUrl = `${url}/api/bot/game/${currentGame}/move/${move}`
             const result = await fetchUrl(moveUrl, 'POST')
             result ? log.info(`Move '${move}' was made.`) : log.error(`Error while making move '${move}'.`)
         } else {
@@ -143,7 +143,7 @@ function makeMove() {
 
 //connect the game state stream listener
 function gameState(id) {
-    const gameStateStreamUrl = `${url}/api/board/game/stream/${id}`
+    const gameStateStreamUrl = `${url}/api/bot/game/stream/${id}`
     const gameStateEmmiter = streamUrl(gameStateStreamUrl)
     gameStateEmmiter.on('data', (e) => {
         processGameState(e)
