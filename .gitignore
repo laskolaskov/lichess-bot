@@ -1,3 +1,4 @@
 node_modules
 .env
 lichess-bot.log
+engine.log
