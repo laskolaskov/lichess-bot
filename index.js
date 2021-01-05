@@ -18,12 +18,11 @@ const engineLogOpts = {
 }
 const log = SimpleNodeLogger.createSimpleFileLogger(logOpts)
 const engineLog = SimpleNodeLogger.createSimpleFileLogger(engineLogOpts)
-//readline
-const readline = require('readline')
 //chess library
 const { Chess } = require('chess.js')
 //chess engine - stockfish
 const stockfish = require('stockfish')()
+
 //configurations
 //environment config
 const {
@@ -31,11 +30,7 @@ const {
     BOT_ID: botID,
     URL: url
 } = process.env
-//readline config
-const rlOpts = {
-    input: process.stdin,
-    output: process.stdout
-}
+
 //chess engine config
 const depth = 15
 
@@ -49,7 +44,6 @@ let isWhite = null
 //TODO
 //1. handle end game (aborted | resigned, etc.) - DONE
 //2. play multiple games simultaneously.
-//3. auto login on start
 
 //handler for Stockfish events
 stockfish.onmessage = function (event) {
@@ -102,6 +96,7 @@ async function processGameState(e) {
         case 'gameFull':
             //determine who is white
             isWhite = (e.white.id === botID)
+            console.log(`Stockfish is playing with ${isWhite ? 'white': 'black'}.`)
             //determine who moves and make a move
             if (e.initialFen === 'startpos') {
                 if (isWhite) {
