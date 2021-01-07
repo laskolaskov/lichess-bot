@@ -21,7 +21,7 @@ const engineLog = SimpleNodeLogger.createSimpleFileLogger(engineLogOpts)
 //chess library
 const { Chess } = require('chess.js')
 //chess engine - stockfish
-const stockfish = require('stockfish')()
+const stockfishConstructor = require('stockfish')
 
 //configurations
 //environment config
@@ -34,27 +34,13 @@ const {
 //chess engine config
 const depth = 15
 
+//games
+const games = new Map()
+//max games allowed
+const maxGames = 100
+
 //the chess library instance
 const chess = new Chess()
-
-//globals
-let currentGame = null
-let isWhite = null
-
-//TODO
-//1. handle end game (aborted | resigned, etc.) - DONE
-//2. play multiple games simultaneously.
-
-//handler for Stockfish events
-stockfish.onmessage = function (event) {
-    engineLog.info(`${event}`)
-    const parsed = event.split(' ')
-    if (parsed[0] === 'bestmove') {
-        const move = parsed[1]
-        console.log(`Stockfish played '${move}'.`)
-        makeMove(move)
-    }
-}
 
 async function processEvent(e) {
     log.info(`Processing event: ${e.type}`)
@@ -70,15 +56,21 @@ async function processEvent(e) {
             log.info(`Challenge to ${e.challenge.challenger.name} was declined.`)
             return
         case 'gameStart':
-            log.info(`Starting game '${e.game.id}'.`)
-            currentGame = e.game.id
-            gameState(currentGame)
+            //create and add game object to games map
+            const gameID = e.game.id
+            const stockfish = makeStockfish(gameID)
+            log.info(`Starting game '${gameID}'.`)
+            games.set(gameID, {
+                id: gameID,
+                stockfish
+            })
+            gameState(gameID)
             return
         case 'gameFinish':
-            if (e.game.id === currentGame) {
-                log.info(`Ended current game (${currentGame}).`)
-                currentGame = null
-                console.log(`Game ended. Awaiting new challenge!`)
+            //TODO - rermove game obj to the map
+            if (games.has(e.game.id)) {
+                log.info(`Ended game (${e.game.id}).`)
+                games.delete(e.game.id)
             }
             return
         default:
@@ -87,29 +79,37 @@ async function processEvent(e) {
     }
 }
 
-async function processGameState(e) {
-    log.info(`Processing game event: ${e.type}`)
+async function processGameState(e, id) {
+    log.info(`Game: ${id}. Processing game event: ${e.type}`)
     log.info(e)
+    let gameObj
     let moves = []
     let movesMod = null
     switch (e.type) {
         case 'gameFull':
+            //get game object
+            gameObj = games.get(id)
             //determine who is white
-            isWhite = (e.white.id === botID)
-            console.log(`Stockfish is playing with ${isWhite ? 'white': 'black'}.`)
+            let isWhite = (e.white.id === botID)
+            //add to game object
+            gameObj.isWhite = isWhite
+            let { stockfish } = gameObj 
+            console.log(`Game: ${id}. Stockfish is playing with ${isWhite ? 'white' : 'black'}.`)
             //determine who moves and make a move
             if (e.initialFen === 'startpos') {
                 if (isWhite) {
-                    thinkerMove()
+                    thinkerMove(stockfish)
                 }
             } else {
                 moves = e.state.moves.toString().trim().split(' ')
                 movesMod = moves.length % 2
                 log.info(`mod :: ${movesMod} | isWhite :: ${isWhite}`)
                 if ((isWhite && movesMod === 0) || (!isWhite && movesMod === 1)) {
-                    thinkerMove(moves)
+                    thinkerMove(stockfish, moves)
                 }
             }
+            //set game object
+            games.set(id, gameObj)
             return
         case 'gameState':
             //handle non 'started' game states
@@ -117,12 +117,14 @@ async function processGameState(e) {
                 handleStatus(e)
                 return
             }
+            //get game object
+            gameObj = games.get(id)
             //determine who moves and make a move
             moves = e.moves.toString().trim().split(' ')
             movesMod = moves.length % 2
-            log.info(`mod :: ${movesMod} | isWhite :: ${isWhite}`)
-            if ((isWhite && movesMod === 0) || (!isWhite && movesMod === 1)) {
-                thinkerMove(moves)
+            log.info(`mod :: ${movesMod} | isWhite :: ${gameObj.isWhite}`)
+            if ((gameObj.isWhite && movesMod === 0) || (!gameObj.isWhite && movesMod === 1)) {
+                thinkerMove(gameObj.stockfish, moves)
             }
             return
         case 'chatLine':
@@ -135,14 +137,11 @@ async function processGameState(e) {
 }
 
 async function processChallenge(e) {
-    if (currentGame) {
-        log.info(`Game ${currentGame} in progress. Auto declining challenge (${e.challenge.id}) by ${e.challenge.challenger.name}.`)
+    if (games.size > maxGames) {
+        log.info(`Maximum games (${maxGames}) reached. Auto declining challenge (${e.challenge.id}) by ${e.challenge.challenger.name}.`)
         declineChallenge(e.challenge.id)
         return
     }
-
-    //set current game
-    currentGame = e.challenge.id
 
     console.log(`Accepting challenge from ${e.challenge.challenger.name}`)
     //accept challenge
@@ -150,7 +149,7 @@ async function processChallenge(e) {
 }
 
 //ask Stockfish for move
-function thinkerMove(moves = []) {
+function thinkerMove(stockfish, moves = []) {
     try {
         //reset board
         chess.reset()
@@ -175,7 +174,7 @@ function thinkerMove(moves = []) {
         }
         console.log('Stockfish is on the move!')
         //engine logs
-        engineLog.info(`Game ID: ${currentGame}`)
+        //engineLog.info(`Game ID: ${currentGame}`) - TODO - fix ???
         engineLog.info(`Thinkering move in depth: ${depth}`)
         engineLog.info(`Position FEN: '${fen}'`)
         //ask Stockfish for the next move using the current FEN
@@ -184,22 +183,26 @@ function thinkerMove(moves = []) {
         console.log('Stockfish is thinking...')
     } catch (error) {
         log.error(error)
-        console.log('Exiting with fatal error, check the log for details.')
+        console.log('Encountered fatal error, check the log for details.')
         return
     }
 }
 
-//make the request for a move
-async function makeMove(move) {
-    try {
-        //make move request
-        const moveUrl = `${url}/api/bot/game/${currentGame}/move/${move}`
-        const result = await fetchUrl(moveUrl, 'POST')
-        result ? log.info(`Move '${move}' was made.`) : log.error(`Error while making move '${move}'.`)
-    } catch (error) {
-        log.error(error)
-        rl.prompt()
-    }
+function makeStockfish(id) {
+    const stockfish = stockfishConstructor()
+    stockfish.onmessage = function (event) {
+        engineLog.info({
+            id,
+            event
+        })
+        const parsed = event.split(' ')
+        if (parsed[0] === 'bestmove') {
+            const move = parsed[1]
+            console.log(`Stockfish played '${move}'.`)
+            makeMove(id, move)
+        }
+    }    
+    return stockfish
 }
 
 function handleStatus(event) {
@@ -212,13 +215,25 @@ function handleStatus(event) {
     }
     if (event.status === 'mate') {
         console.log(`Game ended in mate !`)
-        if ((isWhite && e.winner === 'white') || (!isWhite && e.winner === 'black')) {
+        /* if ((isWhite && e.winner === 'white') || (!isWhite && e.winner === 'black')) {
             console.log(`Stockfish won!`)
         } else {
             console.log(`Opponent won!`)
-        }
+        } */
     }
     return
+}
+
+//make the request for a move
+async function makeMove(gameID, move) {
+    try {
+        //make move request
+        const moveUrl = `${url}/api/bot/game/${gameID}/move/${move}`
+        const result = await fetchUrl(moveUrl, 'POST')
+        result ? log.info(`Move '${move}' was made.`) : log.error(`Error while making move '${move}'.`)
+    } catch (error) {
+        log.error(error)
+    }
 }
 
 //connect the game state stream listener
@@ -226,7 +241,7 @@ function gameState(id) {
     const gameStateStreamUrl = `${url}/api/bot/game/stream/${id}`
     const gameStateEmmiter = streamUrl(gameStateStreamUrl)
     gameStateEmmiter.on('data', (e) => {
-        processGameState(e)
+        processGameState(e, id)
     })
 }
 
@@ -242,10 +257,6 @@ async function declineChallenge(id) {
     log.info(`Declining challenge ${id}.`)
     const result = await fetchUrl(declineUrl, 'POST')
     result ? log.info(`Challenge '${id}' declined.`) : log.error(`Error while declining challenge '${id}'.`)
-    //clear if declining current challenge
-    if (currentGame === id) {
-        currentGame = null
-    }
 }
 
 
